@@ -1,0 +1,87 @@
+                           Tomahawk Installation
+		         Version 1.1, April 28, 2006
+		       Brian Smith, TippingPoint, Inc.
+
+Before compiling Tomahawk, you need the following:
+-- An appropriate machine. See System Requirements.
+-- Libnet version 1.0.2a and libpcap 0.8.1.  Both are linked from
+   tomahawk.sourceforge.net
+
+System Requirements
+
+   The system requirements for Tomahawk are the following:
+
+      o 1.4+ GHz processor
+      o At least 512 MB RAM
+      o Two gigabit test NICs.  The Intel Pro1000 adapters are inexpensive
+        and work well.  If you have only one PCI slot, the Intel dual port
+        Pro1000 can be used.
+      o One NIC for management
+
+   Libnet and libpcap can be downloaded from the following:
+
+	http://www.packetfactory.net/projects/libnet/
+	http://sourceforge.net/projects/libpcap/
+
+Directories
+
+   Place these in a sibling directory to Tomahawk.  Your tree should
+   be the following:
+
+       SRC
+ 	  Libnet-1.0.2a
+	  libpcap-0.8.1
+	  tomahawk1.1
+
+   If your OS includes Libnet and libpcap, then you can use the "independent"
+   Makefile:
+
+       cd tomahawk 1.1
+       make -f Makefile.independent
+
+   If this fails or you otherwise have trouble, try the following.
+
+How to Compile Tomahawk
+
+   Tomahawk compiles out of the box using the following commands:
+
+   1) Compile Libnet and libpcap.
+      - Follow the instructions in those directories.  The instructions 
+        should follow the standard configure/make formula.
+
+   2) Edit the Tomahawk Makefile.
+      - You may want to change the value of the PREFIX variable.  This
+        variable controls the tree in which Tomahawk is installed.  The
+        default is /usr/local.
+      - If you installed the Libnet source in another location, change
+        LNETDIR.
+      - If you installed the libpcap source in another location, change
+        PCAPDIR.
+
+   3) Compile the program.
+      - Run 'make' in the tomahawk directory.
+
+   4) Test the program.
+      - Connect a crossover cable between two test NICS (eth0 and eth1).
+      - Execute the following command:
+           ./tomahawk -l 1 -f test.pcap
+        You should see the following output:
+           % ./tomahawk -l 1 -f test.pcap
+           Beginning test
+
+	     Completed 1 loop of trace test.pcap
+
+	     Finished 1 loops of trace test.pcap Completed: 1, Timed out: 0
+	     Retrans: 0
+	     Sent: 9
+	     Recv: 9
+
+   5) Install the software.
+      - Run 'make install' to copy Tomahawk and the man pages into their
+        destination directories.
+
+Spitefire Tutorial
+
+   See the file TUTORIAL for getting started information.  Visit
+   http://www.tippingpoint.com/tomahawk for information on testing NIPS
+   using Tomahawk.

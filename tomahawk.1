@@ -1,0 +1,295 @@
+.\" $Id: tomahawk.8,v 1.1 2003/05/28 22:17:14 bsmith Exp $
+.TH TOMAHAWK 1
+.SH NAME
+tomahawk \- bidirectionally replay packets from capture files
+.SH SYNOPSIS
+.na
+.B tomahawk
+[
+.B \-i
+.I interface1
+] [
+.B \-j
+.I interface1
+] [
+.B \-h
+] [
+.B \-Z
+] [
+.B \-q
+] [
+.B \-d
+] [
+.B \-W
+] [
+.B \-R
+.I rate
+] [
+.B \-m
+.I window
+] [
+.B \-w
+.I lookahead
+] [
+.B \-a
+.I startIpAddr
+] [
+.B \-s
+.I startId
+] [
+.B \-e
+.I endId
+] [
+.B \-L
+.I logFile
+] [
+.B \-N
+.I maxActive
+] [
+.B \-A
+.I (0|1)
+] [
+.B \-t
+.I timeout
+] [
+.B \-r
+.I maxRetrans
+] [
+.B \-n
+.I maxActive
+] [
+.B \-l
+.I loops
+] [
+.B \-f
+.I file
+]
+
+
+.SH DESCRIPTION
+.LP
+.I tomahawk
+is a tool for replaying network traffic from files saved with 
+\fItcpdump(8)\fP.
+.LP
+The basic operation of
+.I tomahawk
+is to resend all packets from input file(s) from two network interfaces
+as fast as possible, ensuring that the packets arrive at an intermediate
+device (any layer-2 bridging device, but typically a network-based
+intrusion prevention system) in exactly the same order they appeared on
+the network at the time of capture.
+.LP
+While loading a file, Tomahawk automatically partitions the traffic
+between two interfaces.  Tomahawk then replays a \fIwindow\fP of packets
+out one interface and waits for one or more packets to be received at
+the other interface.  When a packet is received, the window moves forward,
+allowing new packets (from either interface) to be sent.
+.LP
+As part of its replay, Tomahawk modifies the IP addresses on the packets.
+This allows many copies of a single trace to be replayed in parallel,
+each stream with its block of IP addresses.  This feature is useful for
+"scaling up" a packet trace from a comparatively low speed network.
+For example, suppose you have a trace of traffic from a 100 Mbps network
+with 500 hosts.  By using the \fImaxActive\fP to 10, you can simulate
+a network with 5000 hosts on a gigabit backbone.
+.LP
+If a packet is dropped in the intermediate network for any reason,
+tomahawk will retransmit the lost packet up to \fImaxRetrans\fP times. 
+This feature differentiates between a NIPS dropping a packet
+due to congestion versus deliberately dropping it because it contains an
+attack.
+.SH GLOBAL OPTIONS
+.LP
+Tomahawk accepts two types of options: global and stream options.
+The global options include the following:
+.TP
+.B \-h 
+Print a usage message and exit.
+.TP
+.B \-Z
+Send debugging information to standard output.  This option can be used
+multiple times to increased verbosity.
+.TP
+.B \-q
+Quiet mode.  Suppresses normal messages (debug and error messages are still
+printed).
+.TP
+.B \-W
+Warning mode.  This mode enables extra checks and prints out warnings.
+.TP
+.B \-w \fIlookahead
+Maximum number of packets to examime while gathering the group to send (default: 500)
+.TP
+.B \-s \fIstartId
+Lowest hadler ID to use (default: 1)
+.TP
+.B \-e \fIendId
+Highest handler ID to use (default: 251)
+.TP
+.B \-L \fIlogFile
+Run in logMode and log packets that time out to logFile (- is STDOUT).
+.TP
+.B \-i \fIinterface1
+Specify the first interface to use in replaying packets.
+.TP
+.B \-j \fIinterface2
+Specify the second interface to use in replaying packets.
+.TP
+.B \-N \fImaxActive
+Specify the maximum number of parallel replays allowed at once.  
+Even though the stream options may specify many packet traces can be
+replayed in parallel, this variable sets an upper limit on the number
+of traces that are replayed in parallel.
+NOTE: Adjusting this parameter can improve or degrade performance.
+.TP
+.B \-m \fIwindow
+Specify the maximum number of packets on the wire at one time.
+Adjusting this parameter can improve or degrade performance.
+.TP
+.B \-R \fIrate
+Limit the rate at which tomahawk sends traffic onto the test network
+to \fIrate\fP megabits/second.  \fIRate\fP can be a floating point
+number.  For example, to generate 100 Kbps of traffic you would 
+use "\-R 0.1"
+.TP
+.B \-a \fIstartIpAddress
+When rewriting IP addresses, start allocating addresses sequentially
+from \fIstartIpAddress\fP.
+
+.SH STREAM OPTIONS
+.LP
+The following options applying to individual streams.  Each option is
+collected and applied to a stream specified in the \fIfile\fP parameter.
+For example, to play
+\fIfile1\fP 2 times,
+\fIfile2\fP 2 times, and 
+\fIfile3\fP 3 times, you would use the flags
+.br
+
+.br
+      -l 2 -f file1 -f file2 -l 3 -f file3
+.TP
+.B \-A \fI(0|1)
+Specify if the tool should modify IP addresses in the packet traces.  
+A value of \fI0\fP suppresses address modification.
+.TP
+.B \-d
+Randomize lower 2 bytes of IP address (use only when the pcap has 2 IPs in it)
+.TP
+.B \-t \fItimeout\fB \-r \fIretrans
+Specify the minimum amount of time (in milliseconds) to wait for a packet
+to arrive at the destination interface after being put on the wire.
+If the packet does not arrive in a timely manner, it is retransmitted up
+the \fIretrans\fP times.
+.TP
+.B \-n \fImaxActive
+Specifies the maximum number of simultaneously active copies of the stream
+that is sent in parallel on the wire.
+.TP
+.B \-l \fIloops
+Specifies the number of copies of the stream that are placed on the
+wire.
+.TP
+.B \-f \fIfile
+Specifies the packet trace that contains the file to be replayed.
+.SH "EXAMPLES"
+.LP
+The following command plays the file outlook.pcap once:
+.TP 
+	tomahawk -l 1 -f outlook.pcap
+.LP
+To play this pcap five times in succession, you would use:
+.LP
+    tomahawk -l 5 -f outlook.pcap
+.LP
+The "-l" parameter controls the number of loops. 
+.LP
+If the trace contains an attack and is replayed through an IPS,
+the IPS should block the attack.  Because an IPS often blocks a 
+stream (identified by a host/port quadruple), Tomahawk gives each 
+replay of the attack its own unique host/port quadruple.  Assuming 
+that the pcap contains 2 addresses, Tomahawk rewrites the packets so 
+that the first replay of the attack is from 10.0.0.1 to 10.0.0.2, 
+the second replay is from 10.0.0.3 to 10.0.0.4, and so on.
+.LP
+You can control the start address with the "-a" flag.  For example:
+.LP
+    tomahawk -l 5 -f outlook.pcap -a 11.0.0.1
+.LP
+starts replay attacks at 11.0.0.1.
+.LP
+The example above plays 5 copies of outlook.pcap sequentially;
+Tomahawk waits for the first replay to complete before sending the
+second.  You can use the "-n" flag to set Tomahawk to
+send the replay packets in parallel.  For example:
+.LP
+    tomahawk -n 3 -l 5 -f outlook.pcap 
+.LP
+replays outlook.pcap 5 times, with up to 3
+versions running simultaneously.
+.LP
+You can also use Tomahawk to play multiple attacks simultaneously.
+For example:
+.LP
+    tomahawk -n 3 -l 5 -f outlook.pcap -f slammer.pcap
+.br
+	     -f codered.pcap 
+.LP
+This command plays up to 3 copies of Outlook, 3 copies of Slammer,
+and 3 copies of CodeRed simultaneously. In terms of the tool,
+it plays 9 simultaneous replays in all, 6 of which (Slammer and 
+CodeRed) are attacks.
+.LP
+The flags that control looping (-l) and parallel replay (-n)
+apply to subsequent packet traces as they are loaded (-f).
+For example, consider the following:
+.LP
+    tomahawk -n 3 -l 5 -f outlook.pcap -n 2 -l 4 -f slammer.pcap
+	     -f codered.pcap 
+.LP
+This command line tells tomahawk:
+.LP
+ o to play outlook 5 times, with up to 3 copies running simultaneously
+.br
+ o to play slammer 4 times, with up to 2 copies running simultaneously
+.br
+ o to play codered 4 times, with up to 2 copies running simultaneously
+.LP
+Up to 7 pcaps and 4 attacks are running simultaneously, and a total of
+8 attacks are run.
+.LP
+The command
+.LP
+    tomahawk -l 1 -r 5 -t 1000 -f outlook.pcap 
+.LP
+sets Tomahawk to wait (at least) 1000 milliseconds
+before declaring a packet lost ("-t 1000") and to retransmit the
+packet 5 times ("-r 5") before giving up and printing a timeout
+message.
+.LP
+.LP
+To limit the data rate generated by Tomahawk, use the "-R" flag.
+For example, to generate 100 Mbps of clean traffic, use the following:
+
+    tomahawk -n 50 -l 10000 -f http.pcap -R 100
+.LP
+The value of "-R" is a floating point number.  To generate 100 Kbps of 
+traffic, use the following:
+.LP
+    tomahawk -n 50 -l 10000 -f http.pcap -R 0.1
+.SH "SEE ALSO"
+tcpdump(8), tcpreplay(8)
+.SH AUTHORS
+Brian Smith, TippingPoint Inc.
+.SH AVAILABILITY
+.LP
+The current version is available via HTTP:
+.LP
+.RS
+.I http://tomahawk.sourceforge.net/
+.RE
+.SH LIMITATIONS
+Please see the tomahawk FAQ for a list of limitations and any possible
+work-arounds:
+.I http://tomahawk.sourceforge.net/FAQ.html

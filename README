@@ -1,0 +1,59 @@
+			    Tomahawk
+		      Version 1.1, April 28, 2006
+		   Brian Smith, TippingPoint, Inc.
+
+This directory contains a public domain software tool called Tomahawk
+for testing network-based intrusion prevention systems (NIPS).
+
+In order to detail the capabilities of modern NIPS and accelerate their
+deployment, we are releasing Tomahawk into the public domain (see the
+file LICENSE in this directory for the legal details).
+
+To date, the tools for testing NIPS have been expensive and limited
+in functionality.  They are typically designed for testing other products,
+such as switches (e.g., SmartBits/ IXIA), server infrastructure (e.g.,
+WebAvalanche), or Firewalls and Intrusion Detection Systems (Firewall
+Informer or IDS Informer).  None of these tools simulate the harsh
+environment of real networks under attacks.
+
+Tomahawk is designed to fill this gap.  It can be used to test the
+throughput and blocking capabilities of network-based intrusion prevention
+systems (NIPS).
+
+Throughput testing
+
+   The throughput of many NIPSs is highly dependent on the protocol mix.
+   A NIPS must reassemble and inspect application level data encapsulated 
+   in network traffic.  It must decode network and application level 
+   protocols.  Since some protocols are more computationally intensive to 
+   decode than others, the effect a NIPS has on network performance can be 
+   highly dependent on the protocol mix that must flow through the NIPS.
+
+   Tomahawk can test the throughput of a NIPS using the most realistic 
+   mix of protocols possible: one obtained by taking a sample of traffic 
+   from the network and replaying it.  A single Tomahawk server can generate 
+   200-450 Mbps of traffic.  By using multiple servers and aggregating 
+   the traffic through a switch, 1 Gbps or more of traffic can be replayed 
+   through the NIPS.
+
+   Tomahawk can also test the connections/second rating of a NIPS.  By  
+   capturing a packet trace that contains a simple connection setup and 
+   teardown (6 packets: SYN, SYN_ACK, ACK, FIN_ACK, FIN_ACK, ACK) and replaying 
+   the traffic using Tomahawk, a single PC can generate 25-50 thousand 
+   connections/second of network traffic.  With 3 inexpensive PCs, about 90K
+   connections/sec can be generated, enough to test the limits of any NIPS.
+
+Security testing
+
+   In addition to throughput testing, Tomahawk can test the blocking
+   capabilities of a NIPS by replaying attacks embedded in packet traces.
+   Tomahawk reports if an attack completes or is blocked, allowing
+   independent verification of the attack blocking capabilities in a NIPS.
+
+   By replaying the same attack hundreds of times, Tomahawk can also test
+   how reliably a NIPS blocks an attack.  A NIPS that blocks an attack only
+   9 in 10 times is not worth much in a worm outbreak.
+
+For more information, please visit:
+
+   http://tomahawk.sourceforge.net/

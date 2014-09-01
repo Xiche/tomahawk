@@ -1,0 +1,424 @@
+Version 1.1, April 28, 2006
+
+Lots of changes and improvements by David Koconis at ICSA labs (thanks,
+Dave!).  These are summarized below:
+
+1. Replacing pcap IP Addresses (courtesy ICSA labs)
+
+   Changed algorithm for assigning rewritten IP addresses.  The new
+   format is X.HID.N.N, where
+    - The first byte (X) can be either a constant - provided by the
+      user on the command line - or taken from the first byte of the IP
+      address in the original packet.
+    - HID is the handler ID.  This method allows for 254 consecutive
+      handlers (values 0 and 255 are reserved in the second octet).
+    - The last 2 octets (N.N) are either chosen at random
+      and guaranteed to be unique within a pcap.
+
+    In choosing to keep the first octet the same as that which was in
+    the original pcap, you not only introduce randomness and uniqueness
+    into the address space but also get IP addresses similar to those in
+    the original pcap since the first octet remains the same.  Use the
+    .d flag on the command line to activate this behavior.
+
+2. Use of Broadcast, Multicast, and Network Addresses (courtesy ICSA labs)
+
+    Previously Tomahawk did not handle broadcast, multicast, and network
+    addresses differently than a normal host or server IP.  Thus Tomahawk
+    wouldn't stop itself from replacing broadcast IP addresses that were
+    in pcaps with something else - such as 205.160.10.16.  As a result
+    traffic like bootp and DHCP would be replayed with destination IP
+    addresses that are never seen with in the real world.
+
+    Now when Tomahawk reads in IP addresses it determines whether or not
+    the traffic can be faithfully reproduced. If it decides some traffic
+    cannot be faithfully reproduced, then Tomahawk does not replay those
+    packets.  The following traffic cannot be faithfully reproduced
+    and is therefore not replayed:  multicast traffic, traffic where
+    the first 2 octets are 0.0, and broadcast traffic where either of
+    the first 2 octets is 255.  Note that these types of things cannot
+    be faithfully reproduced by Tomahawk largely due to the fact that
+    there is presently no way to reconcile the fact that some packets
+    need a 0 or a 255 as the second octet while the handler is likely
+    to be something other than one of those values. Also ignored are
+    any traffic other than TCP, UDP, and ICMP. So, traffic like EIGRP -
+    for example - is never replayed.
+
+    Additionally, Tomahawk is now able to preserve broadcasts where
+    either or both of the last two octets in an IP address are 255 or 0.
+    If the last octet alone is 255 Tomahawk will choose a random value
+    for the 2nd to last octet.
+
+    To summarize, these changes ensure that Tomahawk will not replay
+    multicast traffic, traffic with addresses typically reserved for
+    networks, and some broadcasts.  It is flexible enough however to
+    preserve broadcasts indicated by either of the last 2 octets from
+    the original pcap IP address.   And in general it is more careful
+    when assigning IP addresses such that .0 and .255 are avoided (except
+    as mentioned when preserving broadcasts indicated by one or more of
+    the last 2 octets).
+
+3. Tomahawk and IP Fragments (courtesy ICSA labs)
+
+    Previously, Tomahawk could not be used to replay fragmented TCP and
+    UDP packets.  Here's why:  Tomahawk looked at all frames the same.
+    It always attempted to rewrite the TCP & UDP header checksums.
+    However IP fragments, other than the first fragment, do not include
+    a TCP or UDP header.  But Tomahawk didn't realize this.  Instead
+    Tomahawk wrongly assumed all packets are non-fragments, determined the
+    memory location where the transport layer header checksum should be,
+    and rewrote the data beginning where the checksum would have been -
+    had it not been a fragment.
+
+    Resolution: Tomahawk now checks to see if each packet is either
+    the first fragment OR not a fragment at all.  If either of these is
+    true it recalculates and rewrites the TCP and UDP header checksums.
+    Thus when the packet is a fragment but not the first fragment,
+    it makes no such calculation and doesn't make the mistake of
+    overwriting anything.
+
+    This enables us to use Tomahawk to properly replay pcaps with TCP
+    and UDP fragments in them.
+
+4. Logging the Blocked Packet (courtesy ICSA labs)
+
+    When a Network IPS blocked a packet replayed by Tomahawk this caused
+    Tomahawk to die.  However, it was difficult to determine which packet
+    was blocked and caused Tomahawk to die especially when modified IP
+    addresses were used.
+
+    Resolution: A command line switch (-L) was added to run Tomahawk
+    in .logging mode..  In logging mode, Tomahawk provides enough
+    information about the offending packet to greatly simplify the
+    process of finding it.  This speeds the process of stripping out
+    each flow from the pcap where one or more of the packets in the flow
+    was blocked.  As a result we are able to replay the pcap through
+    the Network IPS in its entirety.
+
+5. TCP and UDP Checksums (courtesy ICSA labs)
+
+    Tomahawk uses a shortcut to calculate TCP and UDP header checksums.
+    Tomahawk begins with the *replacement* source and destination IP
+    addresses and the *original* checksum from the pcap.   Tomahawk then
+    performs some calculations to determine the replacement checksum.
+    This works only when the original checksum in the pcap is correct.
+    Unfortunately, Tomahawk fails to consider when the original checksum
+    is incorrect.  Tomahawk also fails to consider when the original
+    checksum is all 0's - a situation permitted by the UDP RFC (i.e.,
+    calculating the UDP checksum is optional - and if it is not calculated
+    it must be all 0's.).
+
+    Resolution: Now if Tomahawk sees a UDP packet with all 0's for a
+    checksum, it leaves the checksum as is instead of modifying it.
+    We did not correct the problem of pcaps with incorrect checksums
+    in Tomahawk.  Instead, we added a step in creating clean background
+    traffic pcaps that strips out flows where one or more packets have an
+    incorrect checksum.  Clearly, some Network IPS devices may not like
+    it if there are packets with incorrect checksums especially since
+    the UDP RFC says these can be silently discarded and we wouldn.t
+    want our background traffic stopped because of such traffic.
+
+6. Tomahawk and Products that Alter the TTL Field (courtesy ICSA labs)
+
+    Some Network IPS devices modify the TTL field, setting it to
+    the lowest value that they have seen in a stream of traffic.
+    Dynamically modifying frames like this caused headaches for Tomahawk.
+    Here's why:  Suppose Tomahawk sends frames from eth0 through the
+    Network IPS to eth1.  Because Tomahawk changes the IP addresses,
+    ethernet addresses, header checksums, etcetera - there needs to be
+    some means on the receive side to ensure that the frame received at
+    eth1 corresponds to the frame sent out of eth0.  Once it ensures
+    that the sent frame has been accounted for, Tomahawk can send out
+    the reply frame in the same stream on eth0.
+
+    But Tomahawk doesn't want to chew up cycles replacing the addresses
+    in the received frames with the actual addresses, then recalculate
+    the checksums, and then compare what it received to what it thinks
+    it should have received.  So, before doing any other work Tomahawk
+    checks if the lengths of the frames are the same.  And if so, then
+    Tomahawk smartly gets around this extra processing by zeroing out
+    the IP addresses and checksums (and perhaps a couple other things)
+    on both the frame it received and on the frame it thinks it should
+    have received.  Finally, Tomahawk compares the first 100 bytes of
+    these two frames and verifies that they are indeed the same.
+
+    This works great and saves CPU processing until vendor products
+    start to mess with other fields - like the TTL field. Here's an
+    example of the headache for Tomahawk:  The simple, benign http pcap
+    that comes with Tomahawk has a higher TTL value for one of its FINs
+    than any of the other packets.  As a result some vendor products
+    reset this to the lowest TTL value previously seen in the stream.
+    Once the frame is received and after zeroing out the fields, the
+    100 byte comparison shows that the received frame (which had its TTL
+    modified) differs from the original.  As a result Tomahawk conclude
+    that the frames are not the same and times out waiting for a frame
+    since the one it received is not the expected one.
+
+    Resolution: We modified the means by which Tomahawk determines whether
+    or not the frame received is the same as the original frame that
+    should have been received.  Tomahawk now zeroes out not only the
+    IP addresses, ethernet addresses, and checksums on both the frame
+    received and the original frame but also zeroes out the TTL field
+    on both frames as well.  Then it still compares the first 100 bytes.
+    In this way Tomahawk can still accurately decide whether or not the
+    frames are most likely the same.  If so, then the pcap does not die
+    when it is replayed.
+
+    This enables us to test Network IPS products with Tomahawk that may
+    sometimes dynamically change things such as the TTL field.
+
+7. Code Efficiency (courtesy ICSA labs)
+
+    Tomahawk allows the user to pass a rate limiting value from the
+    command line.  Keeping track of the number of bytes sent out, Tomahawk
+    performs some math using the system clock through the ReadSysClock()
+    function to rate limit traffic.  Due to this functionality, the
+    code when executed is not as efficient as it could be.  In fact,
+    profiling the code shows that Tomahawk spends 6-8% of its time in
+    the ReadSysClock() function - even when no rate limiting parameters
+    are passed to it from the command line.
+
+    Resolution: Calls to ReadSysClock() are no longer performed when
+    rate limiting is not chosen at the command line.  The result is more
+    efficient code that when executed improves throughput.  This increase
+    in throughput for a single Tomahawk box ultimately helps decrease
+    the number of Tomahawk engines and switches in our testbed, thereby
+    decreasing both expenses and testbed complexity.
+
+8. Running Multiple Tomahawk Processes at Once (courtesy ICSA labs)
+
+    If one were to start two Tomahawk instances on the same box and
+    use the same IP address space for replacement IP addresses, it was
+    impossible to prevent overlap of IP addresses and handlers used by the
+    other Tomahawk process.  As a result, one process might determine that
+    a frame belonged to it when in fact it belonged to the other process.
+    Because of this potential for overlap, only 1 Tomahawk process per
+    box was reliably possible.
+
+    Resolution: Users can now specify the starting and ending handler ID.
+    Since the handler is now the 2nd octet in the IP address, overlaps in
+    the address space and handlers are avoidable.  For example handler
+    .1 through .23 may be chosen for one Tomahawk instance while .24
+    through .46 may be chosen for another. If the 16 net is chosen for
+    both Tomahawk processes, then one would run from 16.1.x.y through
+    16.23.x.y while the other would run from 16.24.x.y through 16.46.x.y.
+    So, even though the IP address space specified may be similar,
+    Tomahawk processes will not inadvertently steal the others' frames.
+
+    This capability was added originally in hopes that having more than
+    1 Tomahawk process running on the same box would increase throughput
+    and reduce cost for lab infrastructure.  Unfortunately, the result
+    was that we did not find that this markedly improved throughput since
+    each Tomahawk process must examine all traffic coming into the NIC
+    and since each process ultimately discards half the traffic - since
+    1/2 the traffic was meant for the other process.  Note that we did
+    find this functionality useful for testing the logging of exploits
+    when repeatedly sent to and from different IP addresses.
+
+9. What happens if the pcap Contains > 65535 Unique IPs? (courtesy
+   ICSA labs)
+
+    Tomahawk may have problems if a pcap has > 2^16 unique IP addresses.
+    There was no check for this possibility.
+
+    Resolution: There is now a check to see if there are > 2^16 unique
+    IP addresses in a pcap.  When encountered it gets reported and
+    then Tomahawk exits.  This may be an unlikely problem as most of
+    our larger pcaps had ~1-2K unique IPs.  Nevertheless the check was
+    added as a precaution since it is one less problem to debug.
+
+10. Handling Truncated Packets (courtesy ICSA labs)
+
+    If a pcap is captured with a non-1518 snaplength, then there may
+    be some number of non-full frames.  libpcap captures information
+    related to this before each frame in a pcap.  In fact libpcap writes
+    two values before each frame in a pcap.  The first is the size of
+    the frame that was on the wire and the second is the size of the
+    frame that was captured.  If these values are not equal, it means a
+    non-full frame was captured.  Tomahawk dies when it encounters the
+    first truncated, non-full frame.
+
+    Resolution: After determining that you have a pcap with some non-full
+    frames it still may be salvageable for use with Tomahawk.  You just
+    have to identify the non-full frames and strip out all those frames
+    as well as their corresponding flows.  But you do not want to have
+    to do this one at a time - i.e., find one, strip it out along with
+    its corresponding flow, replay the pcap a second time, find the next
+    one, strip it out along with its corresponding flow, repeat, repeat,
+    repeat.  Therefore in log mode, we added code to log all truncated
+    packets to a file instead of stopping at the first truncated packet.
+    Then if there were any truncated frames Tomahawk exits after
+    reading through the entire pcap and logging this information.
+    Now since they've been identified you can collectively strip out
+    all the truncated frames and their corresponding flows at once.
+    Then you can make a decision based on what remains as to whether
+    the pcap is worthwhile or not.
+
+11. Send Groups - How Many Frames From How Many Flows Can
+    Tomahawk Send? (courtesy ICSA labs)
+
+    Tomahawk's algorithm for choosing what frames to send could, in
+    some circumstances, not run as fast as possible. The algorithm was
+    modified to improve performance.
+
+    The original algorithm begins with Tomahawk looking at the first frame
+    in the trace.  That frame is then part of the first group sent out.
+    The interface that the first frame is sent out is noted by Tomahawk.
+    The next frame is then reviewed.  If it was supposed to go out a
+    different interface than the first, the frame is not added to that
+    first group and it is not sent.  No further progression into the
+    trace is possible until that first frame comprising the first group
+    is sent and received.  This is true even though the default value of m
+    (20) has not been reached.
+
+    The maximum number of outstanding frames that can be sent in a
+    group by Tomahawk (i.e., denoted by 'm') is a command-line option.
+    The default value is 20.  This may lead one to believe that Tomahawk
+    often sends groups of 20 frames at a time.  However, in reality,
+    it is seldom true that 20 consecutive frames in a trace are sent
+    out the same interface. The normal group size is almost always less
+    than 5 and very frequently just 1 or 2 before a frame going out the
+    other interface is encountered.
+
+    Here's an example of how the previous version of Tomahawk could slow
+    things down:
+
+    Suppose multiple TCP packets (e.g., 5) are sent from an http server
+    to the client to download a file and the packets pass through the
+    Network IPS device in the packet order 5-1-2-3-4. The Network IPS
+    caches packet 5 temporarily since it is out of order until 1-2-3-4
+    have arrived or a timeout has been reached.  In a pcap, however,
+    the packets may be stored as 5-1-2-X-3-4 (for example), where X
+    is a packet from some other flow that needs to go out a different
+    interface than packets 5-1-2-3-4.  Tomahawk's send group then
+    will only consist of 5-1-2 even with a higher value for m than 3.
+    The other packets will not be sent until these 3 have been received.
+    When the Network IPS receives this group of 3, it caches them since
+    it is expecting to receive packets 3 & 4 imminently.  When it does
+    not, throughput performance suffers and Tomahawk slows down.
+
+    Resolution: The new algorithm for deciding what frames can be sent
+    in a given group takes into account the interface that a frame is
+    sent on AND the flow that the frame belongs to.  The algorithm adds
+    the first frame (i) to the send group.  It stores the interface that
+    frame i should be sent out on as well as a hash value indicating
+    the flow to which the frame belongs.
+
+    The next frame (i+1) is then reviewed.  If there are no frames in the
+    send group that belong to the same flow as the frame under review,
+    then it is added to the group (regardless of the interface it must be
+    sent out on).  If there is at least one frame in the send group that
+    belongs to the same flow, then the frame is not added to the group
+    unless the interface which the frame should be sent out matches the
+    interface for the existing frame(s) in that flow that are already
+    in the group.
+
+    If the frame can not be added to the current send group (e.g., since
+    it is a response to a frame already in the group), then the new
+    algorithm will progress up to 500 packets further into the trace.
+    Additional frames will then be added to the send group until all
+    frames for one side of each started flow in the send group are
+    collected or m packets have been collected.  Once m packets have
+    been added to the send group the algorithm will now look ahead 500
+    additional packets only to try and complete any open flows begun in
+    the send group.
+
+12. Switched to Local Versus Global Run-states (courtesy ICSA labs)
+
+    Tomahawk used a global run-state rather than separate, per handler
+    run-states.  The Tomahawk process was running, stopped, or stalled.
+    Also, it was never clear if the timeouts were accurate since a global
+    variable kept track of them rather than a local, per-handler variable.
+    As a result there was only a global measure of progress being made
+    through a trace.  When a handler would send frames from its send
+    group it would start a global stopwatch and compare that to the
+    maximum time prior to a timeout.  There was no way to ensure that
+    frames sent from other handlers. send groups would timeout properly.
+
+    Resolution: Now, each handler keeps track of its own run-state. There
+    is no longer a stalled state.  Now each handler can be running
+    or stopped.  It.s no longer a per Tomahawk process issue; instead
+    it is a per handler issue.  This way timeouts are more accurately
+    computed.  To do that, each handler records the time after sending
+    its send group.  The handler is periodically polled to see if frames
+    have been received since the last check.  If so, the handler re-sends
+    only those frames in the send group that were not received, records
+    the time, and resets the timeout status.  If not, it checks to see if
+    the timeout value has been reached.  After these changes you can get
+    throughputs in the 500-600Mbps with 15-20 handlers instead of having
+    to use 100 handlers for that same level of throughput as in the past.
+
+13. Ensuring Unambiguous Assignment of Frames to Interfaces (courtesy
+    ICSA labs)
+
+    Tomahawk looks through pcaps and makes IP address assignments
+    to interfaces.  But it does not check to make sure the assignments
+    are unambiguous.  For example, suppose there are 3 flows in a pcap.
+    The first flow begins with A as the client sending to B.  In the
+    second flow C is the client sending to D.  The last is B sending to D.
+    In the first flow Tomahawk determines that since it has never seen IP
+    address A that all packets where that IP is the source will be sent
+    out of eth1.  Tomahawk then determines that since it has never seen
+    destination IP address B that all packets where that IP is the source
+    will be sent out of eth2.  In the second flow Tomahawk makes the same
+    determination. It determines that since it has never seen IP address C
+    that all packets where that IP is the source will be sent out of eth1.
+    And Tomahawk then determines that since it has never seen IP address D
+    that all packets where that IP is the source will be sent out of eth2.
+
+    The problem then occurs with the third flow where B is the client
+    sending the first packet in the flow to D.  Tomahawk has seen both of
+    these IP addresses.  However, previously B and D were both servers;
+    now B is a client.  This time Tomahawk looks at the first packet in
+    the flow and sees that B is the source.  Having seen B.s IP address
+    Tomahawk is prepared to send that packet out of eth2 as it had
+    done previously.  Before doing this it looks at the destination IP.
+    Tomahawk had also sent packets out of eth2 where D was the source.
+    So, Tomahawk overrides its initial impulse to send that frame out
+    of eth2.  Having looked at the destination IP last it decides that
+    it will send the frame out of eth1 since all packets where D is the
+    source went previously out of eth2.  The result is that packets in
+    this flow that have B as the source IP will be sent out of eth1.
+    This could lead to problems for a Network IPS that sits in between.
+    A Network IPS that is paying attention will notice that frames
+    having a source IP address = B are arriving on both interfaces of
+    the same segment.
+
+    Resolution: A .warning. mode (-W) switch was added to the Tomahawk
+    command line.  Tomahawk can now be run first in warning mode to
+    determine where ambiguous assignments like this are being made.
+    Tomahawk now will write all these packets to a file.  They can then
+    be subsequently removed from the pcap via other means.
+
+14. Rate Limiting Improvement (courtesy ICSA labs)
+
+    Since the cbq service is not particularly reliable at rate limiting
+    above 40Mbps, we can use the Tomahawk rate limiting feature when
+    necessary.  However, it too wasn.t as accurate as it could be.
+    Previously, the rate was computed from the start time of the tomahawk
+    process by dividing number of bytes sent by the time.  Suppose you
+    set the rate limiting to 400Mbps.  Because of the algorithm, if
+    there was a long period of time where the program was running under
+    the specified rate (say 100Mbps), it was possible that afterward
+    there could be a prolonged period of time where it could run at
+    (400Mbps+300Mbps).
+
+    Resolution: This situation was alleviated by a new algorithm. The
+    implementation of the rate limiting algorithm was modified so that
+    it will time average the send rate over the last second.
+
+15. Handler ID Assignment (courtesy ICSA labs)
+
+    The function that assigns the ID to a newly created handler was
+    modified so it will begin looking for a free ID to use that is
+    one greater than the highest in the set of handler IDs that were
+    most recently used.  This prevents a newly created handler from
+    reusing the ID of a handler that just finished.  This change was
+    needed since some Network IPS devices will block the second Handler
+    instance because, if the handler IDs are the same, then the flows
+    will have the exact same IP addresses as traffic already seen.
+    Note that since 10-15 handlers are needed to achieve high throughput
+    rates now, as opposed to the 100-200 handlers needed in the past to
+    get those high throughput rates, then Tomahawk is far less likely
+    to cycle back through old handler IDs.
+

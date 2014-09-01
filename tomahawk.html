@@ -1,0 +1,452 @@
+Content-type: text/html
+
+<HTML><HEAD><TITLE>Manpage of TOMAHAWK</TITLE>
+</HEAD><BODY>
+<H1>TOMAHAWK</H1>
+Section: User Commands  (1)<BR><A HREF="#index">Index</A>
+<A HREF="http://localhost/cgi-bin/man/man2html">Return to Main Contents</A><HR>
+
+<A NAME="lbAB">&nbsp;</A>
+<H2>NAME</H2>
+
+tomahawk - bidirectionally replay packets from capture files
+<A NAME="lbAC">&nbsp;</A>
+<H2>SYNOPSIS</H2>
+
+
+<B>tomahawk</B>
+
+[
+<B>-i</B>
+
+<I>interface1</I>
+
+] [
+<B>-j</B>
+
+<I>interface1</I>
+
+] [
+<B>-h</B>
+
+] [
+<B>-Z</B>
+
+] [
+<B>-q</B>
+
+] [
+<B>-d</B>
+
+] [
+<B>-W</B>
+
+] [
+<B>-R</B>
+
+<I>rate</I>
+
+] [
+<B>-m</B>
+
+<I>window</I>
+
+] [
+<B>-w</B>
+
+<I>lookahead</I>
+
+] [
+<B>-a</B>
+
+<I>startIpAddr</I>
+
+] [
+<B>-s</B>
+
+<I>startId</I>
+
+] [
+<B>-e</B>
+
+<I>endId</I>
+
+] [
+<B>-L</B>
+
+<I>logFile</I>
+
+] [
+<B>-N</B>
+
+<I>maxActive</I>
+
+] [
+<B>-A</B>
+
+<I>(0|1)</I>
+
+] [
+<B>-t</B>
+
+<I>timeout</I>
+
+] [
+<B>-r</B>
+
+<I>maxRetrans</I>
+
+] [
+<B>-n</B>
+
+<I>maxActive</I>
+
+] [
+<B>-l</B>
+
+<I>loops</I>
+
+] [
+<B>-f</B>
+
+<I>file</I>
+
+]
+<P>
+<P>
+<A NAME="lbAD">&nbsp;</A>
+<H2>DESCRIPTION</H2>
+
+<P>
+
+<I>tomahawk</I>
+
+is a tool for replaying network traffic from files saved with 
+<I><A HREF="http://localhost/cgi-bin/man/man2html?8+tcpdump">tcpdump</A>(8)</I>.
+<P>
+
+The basic operation of
+<I>tomahawk</I>
+
+is to resend all packets from input file(s) from two network interfaces
+as fast as possible, ensuring that the packets arrive at an intermediate
+device (any layer-2 bridging device, but typically a network-based
+intrusion prevention system) in exactly the same order they appeared on
+the network at the time of capture.
+<P>
+
+While loading a file, Tomahawk automatically partitions the traffic
+between two interfaces.  Tomahawk then replays a <I>window</I> of packets
+out one interface and waits for one or more packets to be received at
+the other interface.  When a packet is received, the window moves forward,
+allowing new packets (from either interface) to be sent.
+<P>
+
+As part of its replay, Tomahawk modifies the IP addresses on the packets.
+This allows many copies of a single trace to be replayed in parallel,
+each stream with its block of IP addresses.  This feature is useful for
+&quot;scaling up&quot; a packet trace from a comparatively low speed network.
+For example, suppose you have a trace of traffic from a 100 Mbps network
+with 500 hosts.  By using the <I>maxActive</I> to 10, you can simulate
+a network with 5000 hosts on a gigabit backbone.
+<P>
+
+If a packet is dropped in the intermediate network for any reason,
+tomahawk will retransmit the lost packet up to <I>maxRetrans</I> times. 
+This feature differentiates between a NIPS dropping a packet
+due to congestion versus deliberately dropping it because it contains an
+attack.
+<A NAME="lbAE">&nbsp;</A>
+<H2>GLOBAL OPTIONS</H2>
+
+<P>
+
+Tomahawk accepts two types of options: global and stream options.
+The global options include the following:
+<DL COMPACT>
+<DT><B>-h </B>
+
+<DD>
+Print a usage message and exit.
+<DT><B>-Z</B>
+
+<DD>
+Send debugging information to standard output.  This option can be used
+multiple times to increased verbosity.
+<DT><B>-q</B>
+
+<DD>
+Quiet mode.  Suppresses normal messages (debug and error messages are still
+printed).
+<DT><B>-W</B>
+
+<DD>
+Warning mode.  This mode enables extra checks and prints out warnings.
+<DT><B>-w </B><I>lookahead</I>
+
+<DD>
+Maximum number of packets to examime while gathering the group to send (default: 500)
+<DT><B>-s </B><I>startId</I>
+
+<DD>
+Lowest hadler ID to use (default: 1)
+<DT><B>-e </B><I>endId</I>
+
+<DD>
+Highest handler ID to use (default: 251)
+<DT><B>-L </B><I>logFile</I>
+
+<DD>
+Run in logMode and log packets that time out to logFile (- is STDOUT).
+<DT><B>-i </B><I>interface1</I>
+
+<DD>
+Specify the first interface to use in replaying packets.
+<DT><B>-j </B><I>interface2</I>
+
+<DD>
+Specify the second interface to use in replaying packets.
+<DT><B>-N </B><I>maxActive</I>
+
+<DD>
+Specify the maximum number of parallel replays allowed at once.  
+Even though the stream options may specify many packet traces can be
+replayed in parallel, this variable sets an upper limit on the number
+of traces that are replayed in parallel.
+NOTE: Adjusting this parameter can improve or degrade performance.
+<DT><B>-m </B><I>window</I>
+
+<DD>
+Specify the maximum number of packets on the wire at one time.
+Adjusting this parameter can improve or degrade performance.
+<DT><B>-R </B><I>rate</I>
+
+<DD>
+Limit the rate at which tomahawk sends traffic onto the test network
+to <I>rate</I> megabits/second.  <I>Rate</I> can be a floating point
+number.  For example, to generate 100 Kbps of traffic you would 
+use &quot;-R 0.1&quot;
+<DT><B>-a </B><I>startIpAddress</I>
+
+<DD>
+When rewriting IP addresses, start allocating addresses sequentially
+from <I>startIpAddress</I>.
+<P>
+</DL>
+<A NAME="lbAF">&nbsp;</A>
+<H2>STREAM OPTIONS</H2>
+
+<P>
+
+The following options applying to individual streams.  Each option is
+collected and applied to a stream specified in the <I>file</I> parameter.
+For example, to play
+<I>file1</I> 2 times,
+<I>file2</I> 2 times, and 
+<I>file3</I> 3 times, you would use the flags
+<BR>
+
+<P>
+<BR>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-l&nbsp;2&nbsp;-f&nbsp;file1&nbsp;-f&nbsp;file2&nbsp;-l&nbsp;3&nbsp;-f&nbsp;file3
+<DL COMPACT>
+<DT><B>-A </B><I>(0|1)</I>
+
+<DD>
+Specify if the tool should modify IP addresses in the packet traces.  
+A value of <I>0</I> suppresses address modification.
+<DT><B>-d</B>
+
+<DD>
+Randomize lower 2 bytes of IP address (use only when the pcap has 2 IPs in it)
+<DT><B>-t </B><I>timeout</I><B> -r </B><I>retrans</I>
+
+<DD>
+Specify the minimum amount of time (in milliseconds) to wait for a packet
+to arrive at the destination interface after being put on the wire.
+If the packet does not arrive in a timely manner, it is retransmitted up
+the <I>retrans</I> times.
+<DT><B>-n </B><I>maxActive</I>
+
+<DD>
+Specifies the maximum number of simultaneously active copies of the stream
+that is sent in parallel on the wire.
+<DT><B>-l </B><I>loops</I>
+
+<DD>
+Specifies the number of copies of the stream that are placed on the
+wire.
+<DT><B>-f </B><I>file</I>
+
+<DD>
+Specifies the packet trace that contains the file to be replayed.
+</DL>
+<A NAME="lbAG">&nbsp;</A>
+<H2>EXAMPLES</H2>
+
+<P>
+
+The following command plays the file outlook.pcap once:
+<DL COMPACT>
+<DT><TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>tomahawk -l 1 -f outlook.pcap<DD>
+</DL>
+<P>
+
+To play this pcap five times in succession, you would use:<BR>
+<P>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;tomahawk&nbsp;-l&nbsp;5&nbsp;-f&nbsp;outlook.pcap
+<P>
+
+The &quot;-l&quot; parameter controls the number of loops. 
+<P>
+
+If the trace contains an attack and is replayed through an IPS,
+the IPS should block the attack.  Because an IPS often blocks a 
+stream (identified by a host/port quadruple), Tomahawk gives each 
+replay of the attack its own unique host/port quadruple.  Assuming 
+that the pcap contains 2 addresses, Tomahawk rewrites the packets so 
+that the first replay of the attack is from 10.0.0.1 to 10.0.0.2, 
+the second replay is from 10.0.0.3 to 10.0.0.4, and so on.
+<P>
+
+You can control the start address with the &quot;-a&quot; flag.  For example:
+<P>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;tomahawk&nbsp;-l&nbsp;5&nbsp;-f&nbsp;outlook.pcap&nbsp;-a&nbsp;11.0.0.1
+<P>
+
+starts replay attacks at 11.0.0.1.
+<P>
+
+The example above plays 5 copies of outlook.pcap sequentially;
+Tomahawk waits for the first replay to complete before sending the
+second.  You can use the &quot;-n&quot; flag to set Tomahawk to
+send the replay packets in parallel.  For example:
+<P>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;tomahawk&nbsp;-n&nbsp;3&nbsp;-l&nbsp;5&nbsp;-f&nbsp;outlook.pcap&nbsp;
+<P>
+
+replays outlook.pcap 5 times, with up to 3
+versions running simultaneously.
+<P>
+
+You can also use Tomahawk to play multiple attacks simultaneously.
+For example:
+<P>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;tomahawk&nbsp;-n&nbsp;3&nbsp;-l&nbsp;5&nbsp;-f&nbsp;outlook.pcap&nbsp;-f&nbsp;slammer.pcap
+<BR>
+
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>     -f codered.pcap <BR>
+<P>
+
+This command plays up to 3 copies of Outlook, 3 copies of Slammer,
+and 3 copies of CodeRed simultaneously. In terms of the tool,
+it plays 9 simultaneous replays in all, 6 of which (Slammer and 
+CodeRed) are attacks.
+<P>
+
+The flags that control looping (-l) and parallel replay (-n)
+apply to subsequent packet traces as they are loaded (-f).
+For example, consider the following:
+<P>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;tomahawk&nbsp;-n&nbsp;3&nbsp;-l&nbsp;5&nbsp;-f&nbsp;outlook.pcap&nbsp;-n&nbsp;2&nbsp;-l&nbsp;4&nbsp;-f&nbsp;slammer.pcap
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>     -f codered.pcap <BR>
+<P>
+
+This command line tells tomahawk:
+<P>
+
+<BR>&nbsp;o&nbsp;to&nbsp;play&nbsp;outlook&nbsp;5&nbsp;times,&nbsp;with&nbsp;up&nbsp;to&nbsp;3&nbsp;copies&nbsp;running&nbsp;simultaneously
+<BR>
+
+<BR>&nbsp;o&nbsp;to&nbsp;play&nbsp;slammer&nbsp;4&nbsp;times,&nbsp;with&nbsp;up&nbsp;to&nbsp;2&nbsp;copies&nbsp;running&nbsp;simultaneously
+<BR>
+
+<BR>&nbsp;o&nbsp;to&nbsp;play&nbsp;codered&nbsp;4&nbsp;times,&nbsp;with&nbsp;up&nbsp;to&nbsp;2&nbsp;copies&nbsp;running&nbsp;simultaneously
+<P>
+
+Up to 7 pcaps and 4 attacks are running simultaneously, and a total of
+8 attacks are run.
+<P>
+
+The command
+<P>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;tomahawk&nbsp;-l&nbsp;1&nbsp;-r&nbsp;5&nbsp;-t&nbsp;1000&nbsp;-f&nbsp;outlook.pcap&nbsp;
+<P>
+
+sets Tomahawk to wait (at least) 1000 milliseconds
+before declaring a packet lost (&quot;-t 1000&quot;) and to retransmit the
+packet 5 times (&quot;-r 5&quot;) before giving up and printing a timeout
+message.
+<P>
+
+<P>
+
+To limit the data rate generated by Tomahawk, use the &quot;-R&quot; flag.
+For example, to generate 100 Mbps of clean traffic, use the following:
+<P>
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;tomahawk&nbsp;-n&nbsp;50&nbsp;-l&nbsp;10000&nbsp;-f&nbsp;http.pcap&nbsp;-R&nbsp;100
+<P>
+
+The value of &quot;-R&quot; is a floating point number.  To generate 100 Kbps of 
+traffic, use the following:
+<P>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;tomahawk&nbsp;-n&nbsp;50&nbsp;-l&nbsp;10000&nbsp;-f&nbsp;http.pcap&nbsp;-R&nbsp;0.1
+<A NAME="lbAH">&nbsp;</A>
+<H2>SEE ALSO</H2>
+
+<A HREF="http://localhost/cgi-bin/man/man2html?8+tcpdump">tcpdump</A>(8), <A HREF="http://localhost/cgi-bin/man/man2html?8+tcpreplay">tcpreplay</A>(8)
+<A NAME="lbAI">&nbsp;</A>
+<H2>AUTHORS</H2>
+
+Brian Smith, TippingPoint Inc.
+<A NAME="lbAJ">&nbsp;</A>
+<H2>AVAILABILITY</H2>
+
+<P>
+
+The current version is available via HTTP:
+<P>
+
+<DL COMPACT><DT><DD>
+<I><A HREF="http://tomahawk.sourceforge.net/">http://tomahawk.sourceforge.net/</A></I>
+
+</DL>
+
+<A NAME="lbAK">&nbsp;</A>
+<H2>LIMITATIONS</H2>
+
+Please see the tomahawk FAQ for a list of limitations and any possible
+work-arounds:
+<I><A HREF="http://tomahawk.sourceforge.net/FAQ.html">http://tomahawk.sourceforge.net/FAQ.html</A></I>
+
+<P>
+
+<HR>
+<A NAME="index">&nbsp;</A><H2>Index</H2>
+<DL>
+<DT><A HREF="#lbAB">NAME</A><DD>
+<DT><A HREF="#lbAC">SYNOPSIS</A><DD>
+<DT><A HREF="#lbAD">DESCRIPTION</A><DD>
+<DT><A HREF="#lbAE">GLOBAL OPTIONS</A><DD>
+<DT><A HREF="#lbAF">STREAM OPTIONS</A><DD>
+<DT><A HREF="#lbAG">EXAMPLES</A><DD>
+<DT><A HREF="#lbAH">SEE ALSO</A><DD>
+<DT><A HREF="#lbAI">AUTHORS</A><DD>
+<DT><A HREF="#lbAJ">AVAILABILITY</A><DD>
+<DT><A HREF="#lbAK">LIMITATIONS</A><DD>
+</DL>
+<HR>
+This document was created by
+<A HREF="http://localhost/cgi-bin/man/man2html">man2html</A>,
+using the manual pages.<BR>
+Time: 17:55:14 GMT, April 28, 2006
+</BODY>
+</HTML>
